@@ -312,6 +312,27 @@ function listenToFirebase() {
     }
   });
 
+  db.ref('settings').on('value', snap => {
+    const data = snap.val();
+    if (!data) return;
+    // Apply user roles
+    if (data.userRoles) {
+      USERS.forEach(u => {
+        if (data.userRoles[u.id]) {
+          u.role = data.userRoles[u.id].role;
+        }
+      });
+      // Update current user role if it changed
+      if (state.currentUser) {
+        const updated = USERS.find(u => u.id === state.currentUser.id);
+        if (updated) state.currentUser.role = updated.role;
+      }
+    }
+    // Apply EOD settings
+    if (data.eodTime) state.eodTime = data.eodTime;
+    if (data.eodEnabled !== undefined) state.eodEnabled = data.eodEnabled;
+  });
+
   db.ref('archive').on('value', snap => {
     const data = snap.val();
     if (data && Array.isArray(data)) {
@@ -742,6 +763,7 @@ function saveArchiveSettings() {
   state.eodEnabled = document.getElementById('eod-enabled').checked;
   closeModal();
   setupEodTimer();
+  syncUserSettingsToFirebase();
   showAlert('✓ Archive settings saved. EOD auto-archive ' + (state.eodEnabled ? 'enabled at ' + state.eodTime : 'disabled') + '.', 'success');
 }
 
@@ -771,16 +793,26 @@ function clearPassword(userId) {
 function changeUserRole(userId, newRole) {
   const user = USERS.find(u => u.id === userId);
   if (!user) return;
-  // Don't allow changing your own role
   if (state.currentUser && state.currentUser.id === userId) {
     showAlert('You cannot change your own role.', 'warning');
     return;
   }
   user.role = newRole;
-  // If currently logged in user's role changed, update state
-  const activeUser = state.currentUser;
-  if (activeUser && activeUser.id === userId) activeUser.role = newRole;
+  if (state.currentUser && state.currentUser.id === userId) state.currentUser.role = newRole;
+  // Save to Firebase so it persists
+  syncUserSettingsToFirebase();
   showAlert('✓ ' + user.name + ' role updated to ' + newRole.toUpperCase(), 'success');
+}
+
+function syncUserSettingsToFirebase() {
+  if (!db) return;
+  const roles = {};
+  USERS.forEach(u => { roles[u.id] = { role: u.role }; });
+  db.ref('settings').set({
+    userRoles: roles,
+    eodTime: state.eodTime,
+    eodEnabled: state.eodEnabled
+  }).catch(e => console.error('Settings sync error', e));
 }
 
 function syncArchiveToFirebase() {
