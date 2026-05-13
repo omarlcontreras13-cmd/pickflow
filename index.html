@@ -1141,7 +1141,7 @@ function showNewTicket() {
         <h2>+ NEW PICK TICKET</h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
           <div class="form-group"><label>DATE</label><input type="date" id="nd-date" value="${today}"></div>
-          <div class="form-group"><label>CLERK *</label><input type="text" id="nd-clerk" placeholder="Your name" autofocus></div>
+          <div class="form-group"><label>CLERK *</label><input type="text" id="nd-clerk" placeholder="Your name" value="${state.currentUser ? state.currentUser.name : ''}" autofocus></div>
           <div class="form-group"><label>ORDER #</label><input type="text" id="nd-order" placeholder="e.g. 80070981"></div>
           <div class="form-group"><label>PICKER</label><input type="text" id="nd-picker" placeholder="Picker name"></div>
           <div class="form-group"><label>DESTINATION</label><input type="text" id="nd-dest" placeholder="e.g. Canada Dry Delaware"></div>
