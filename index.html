@@ -251,11 +251,21 @@ function syncQtyGuideToFirebase() {
 function syncInventoryToFirebase() {
   const compact = state.inventory.map(r => ({
     s: r.sku, p: r.pcs, l: r.location,
-    e: r.expDate ? r.expDate.getTime() : null
+    e: r.expDate ? r.expDate.getTime() : null,
+    lot: r.lot||'', skid: r.skid||'', po: r.po||'',
+    gw: r.grossWt||'', bol: r.bol||'', pp: r.pcsPending||0
   }));
   db.ref('inventory').set(compact)
     .then(() => showAlert('✓ Inventory synced to all users.', 'success'))
     .catch(e => console.error('Inventory sync error', e));
+  // Also sync rawInventory
+  const rawCompact = state.rawInventory.map(r => ({
+    s: r.sku, p: r.pcs, l: r.location,
+    e: r.expDate ? r.expDate.getTime() : null,
+    st: r.status||'', lot: r.lot||'', skid: r.skid||'',
+    po: r.po||'', gw: r.grossWt||'', bol: r.bol||'', pp: r.pcsPending||0
+  }));
+  db.ref('rawInventory').set(rawCompact).catch(e => console.error('Raw inv sync error', e));
 }
 
 function listenToFirebase() {
@@ -310,27 +320,54 @@ function listenToFirebase() {
     }
   });
 
+  db.ref('rawInventory').on('value', snap => {
+    const data = snap.val();
+    if (data && Array.isArray(data) && data.length > 0) {
+      state.rawInventory = data.map(r => ({
+        sku: r.s, pcs: r.p, location: r.l,
+        expDate: r.e ? new Date(r.e) : null,
+        status: r.st||'AVAILABLE', lot: r.lot||'', skid: r.skid||'',
+        po: r.po||'', grossWt: r.gw||'', bol: r.bol||'', pcsPending: r.pp||0
+      }));
+      try { localStorage.setItem('pickflow_rawinv', JSON.stringify(state.rawInventory)); } catch(e) {}
+    }
+  });
+
   db.ref('inventory').on('value', snap => {
     const data = snap.val();
     if (data && Array.isArray(data) && data.length > 0) {
       state.inventory = data.map(r => ({
         sku: r.s, pcs: r.p, location: r.l,
         expDate: r.e ? new Date(r.e) : null,
-        status: 'AVAILABLE'
+        status: 'AVAILABLE',
+        lot: r.lot||'', skid: r.skid||'', po: r.po||'',
+        grossWt: r.gw||'', bol: r.bol||'', pcsPending: r.pp||0
       }));
+      // Also load rawInventory if available
+      const raw = snap.val();
       try { localStorage.setItem('pickflow_inv', JSON.stringify(state.inventory)); } catch(e) {}
-      if (Object.keys(state.qtyGuide).length > 0) {
-        buildHelper();
-        state.dataLoaded = true;
-        const nb = document.getElementById('new-ticket-btn');
-        const pb = document.getElementById('preview-btn');
-        const rb = document.getElementById('rebuild-btn');
-        if (nb) nb.disabled = false;
-        if (pb) pb.disabled = false;
-        if (rb) rb.style.display = 'flex';
-        const ds = document.getElementById('data-status');
-        if (ds) ds.innerHTML = '<span class="status-dot"></span>DATA LOADED: ' + state.inventory.length + ' RECORDS';
-      }
+      // Wait for QTY guide then build helper
+      const tryBuild = () => {
+        if (Object.keys(state.qtyGuide).length > 0) {
+          buildHelper();
+          state.dataLoaded = true;
+          const nb = document.getElementById('new-ticket-btn');
+          const pb = document.getElementById('preview-btn');
+          const rb = document.getElementById('rebuild-btn');
+          const ab = document.getElementById('archive-settings-btn');
+          if (nb) nb.disabled = false;
+          if (pb) pb.disabled = false;
+          if (rb) rb.style.display = isAdmin() ? 'flex' : 'none';
+          if (ab) ab.style.display = isAdmin() ? 'flex' : 'none';
+          const ds = document.getElementById('data-status');
+          if (ds) ds.innerHTML = '<span class="status-dot"></span>DATA LOADED: ' + state.inventory.length + ' RECORDS';
+          if (state.currentUser) showDashboard();
+        } else {
+          // QTY guide not loaded yet - retry in 500ms
+          setTimeout(tryBuild, 500);
+        }
+      };
+      tryBuild();
     }
   });
 }
