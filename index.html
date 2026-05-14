@@ -127,6 +127,7 @@
     <span id="ticket-count">0 / 20 TICKETS</span>
     <span id="sync-status" class="sync-indicator sync-pending">⟳ CONNECTING...</span>
     <span id="current-time"></span>
+    <button onclick="location.reload(true)" style="padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:var(--font);font-size:10px;letter-spacing:1px" title="Force refresh to latest version">↻ REFRESH APP</button>
   </div>
 </div>
 <div id="login-screen" class="login-screen">
@@ -312,6 +313,14 @@ function listenToFirebase() {
     }
   });
 
+  db.ref('lastImport').on('value', snap => {
+    const ts = snap.val();
+    if (ts) {
+      state.lastImport = ts;
+      updateImportStamp();
+    }
+  });
+
   db.ref('settings').on('value', snap => {
     const data = snap.val();
     if (!data) return;
@@ -383,6 +392,7 @@ function listenToFirebase() {
           const ds = document.getElementById('data-status');
           if (ds) ds.innerHTML = '<span class="status-dot"></span>DATA LOADED: ' + state.inventory.length + ' RECORDS';
           if (state.currentUser) showDashboard();
+          updateImportStamp();
         } else {
           // QTY guide not loaded yet - retry in 500ms
           setTimeout(tryBuild, 500);
@@ -408,6 +418,7 @@ let state = {
   archivedTickets: [],
   activeTicket: null,
   importMode: 'data',
+  lastImport: null,
   currentUser: null,
   sidebarTab: 'open',
   eodTime: '17:00',
@@ -428,7 +439,29 @@ function loadState() {
   } catch(e) {}
 }
 function genId() { return 'PT-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substr(2,3).toUpperCase(); }
-function updateClock() { document.getElementById('current-time').textContent = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); }
+function updateImportStamp() {
+  const el = document.getElementById('data-status');
+  if (!el || !state.lastImport) return;
+  const d = new Date(state.lastImport);
+  const dateStr = d.toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric'});
+  const timeStr = d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+  const jan = new Date(d.getFullYear(),0,1).getTimezoneOffset();
+  const jul = new Date(d.getFullYear(),6,1).getTimezoneOffset();
+  const tz = d.getTimezoneOffset() < Math.max(jan,jul) ? 'EDT' : 'EST';
+  el.innerHTML = '<span class="status-dot"></span>DATA LOADED: ' + state.inventory.length + ' RECORDS &nbsp;|&nbsp; Last Import: ' + dateStr + ' ' + timeStr + ' ' + tz;
+}
+
+function updateClock() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', {month:'2-digit', day:'2-digit', year:'numeric'});
+  const timeStr = now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+  // Determine EST vs EDT based on daylight saving time
+  const jan = new Date(now.getFullYear(), 0, 1).getTimezoneOffset();
+  const jul = new Date(now.getFullYear(), 6, 1).getTimezoneOffset();
+  const isDST = now.getTimezoneOffset() < Math.max(jan, jul);
+  const tz = isDST ? 'EDT' : 'EST';
+  document.getElementById('current-time').textContent = dateStr + ' ' + timeStr + ' ' + tz;
+}
 setInterval(updateClock, 1000); updateClock();
 loadState();
 
@@ -995,7 +1028,9 @@ function processImport(wb) {
   // Save inventory locally and sync to Firebase for all users
   try { localStorage.setItem('pickflow_inv', JSON.stringify(state.inventory)); } catch(e) {}
   try { localStorage.setItem('pickflow_rawinv', JSON.stringify(state.rawInventory)); } catch(e) {}
+  state.lastImport = Date.now();
   syncInventoryToFirebase();
+  db.ref('lastImport').set(state.lastImport).catch(e=>{});
   document.getElementById('new-ticket-btn').disabled = false;
   document.getElementById('preview-btn').disabled = false;
   document.getElementById('rebuild-btn').style.display = 'flex';
