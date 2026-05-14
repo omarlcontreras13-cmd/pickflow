@@ -732,6 +732,7 @@ function viewArchivedTicket(id) {
         </div>
       </div>
       <div class="ticket-actions" style="flex-direction:column;align-items:flex-end">
+        <button class="btn btn-sm" onclick="exportLoadTag('${id}',true)">🏷 Load Tag</button>
         <button class="btn btn-sm" onclick="exportExcel('${id}',true)">⬇ Excel</button>
         <button class="btn btn-sm" onclick="exportPDF('${id}',true)">⬇ PDF</button>
         <button class="btn btn-sm" onclick="window.print()">🖨 Print</button>
@@ -1326,7 +1327,8 @@ function viewTicket(id) {
           </div>
         </div>
         <div class="ticket-actions" style="flex-direction:column;align-items:flex-end">
-          <button class="btn btn-sm" onclick="editTicket('${id}')">✎ Edit</button>
+          <button class="btn btn-sm" onclick="exportLoadTag('${id}')">🏷 Load Tag</button>
+        <button class="btn btn-sm" onclick="editTicket('${id}')">✎ Edit</button>
           <button class="btn btn-sm" onclick="exportExcel('${id}')">⬇ Excel</button>
           <button class="btn btn-sm" onclick="exportPDF('${id}')">⬇ PDF</button>
           <button class="btn btn-sm" onclick="window.print()">🖨 Print</button>
@@ -1429,6 +1431,63 @@ function deleteTicket(id) {
 }
 
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
+function exportLoadTag(id, fromArchive=false) {
+  const ticket = fromArchive
+    ? state.archivedTickets.find(t=>t.id===id)
+    : state.tickets.find(t=>t.id===id);
+  if (!ticket) return;
+
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'letter'});
+  const pageW = 279, pageH = 216;
+  const centerX = pageW / 2;
+
+  function drawTag() {
+    doc.setFillColor(255,255,255);
+    doc.rect(0,0,pageW,pageH,'F');
+    doc.setDrawColor(200,200,200);
+    doc.setLineWidth(0.5);
+    doc.rect(10,5,pageW-20,pageH-10);
+
+    // ORDER #
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(18); doc.setTextColor(120,120,120);
+    doc.text('ORDER #', centerX, 50, {align:'center'});
+    doc.setFontSize(72); doc.setTextColor(20,20,20);
+    doc.text(ticket.orderNum||'—', centerX, 95, {align:'center'});
+
+    // Divider
+    doc.setDrawColor(200,200,200); doc.setLineWidth(0.3);
+    doc.line(40,105,pageW-40,105);
+
+    // DESTINATION
+    doc.setFontSize(18); doc.setTextColor(120,120,120);
+    doc.text('DESTINATION', centerX, 120, {align:'center'});
+    doc.setFontSize(42); doc.setTextColor(20,20,20);
+    doc.text(ticket.dest||'—', centerX, 143, {align:'center'});
+
+    // Divider
+    doc.setDrawColor(200,200,200);
+    doc.line(40,152,pageW-40,152);
+
+    // APPT
+    doc.setFontSize(18); doc.setTextColor(120,120,120);
+    doc.text('APPT.', centerX, 165, {align:'center'});
+    doc.setFontSize(40); doc.setTextColor(20,20,20);
+    doc.text(ticket.appt||'—', centerX, 186, {align:'center'});
+  }
+
+  // Copy 1
+  drawTag();
+  // Copy 2
+  doc.addPage();
+  drawTag();
+
+  const pdfBlob = doc.output('blob');
+  window.open(URL.createObjectURL(pdfBlob), '_blank');
+}
+
+
 function exportExcel(id) {
   const ticket=state.tickets.find(t=>t.id===id); if(!ticket) return;
   const computed=computeTicketLocations(ticket);
