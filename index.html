@@ -324,18 +324,28 @@ function listenToFirebase() {
   db.ref('settings').on('value', snap => {
     const data = snap.val();
     if (!data) return;
-    // Apply user roles
-    if (data.userRoles) {
+    // Apply user roles and passwords
+    if (data.userSettings) {
       USERS.forEach(u => {
-        if (data.userRoles[u.id]) {
-          u.role = data.userRoles[u.id].role;
+        if (data.userSettings[u.id]) {
+          u.role = data.userSettings[u.id].role || u.role;
+          const pwd = data.userSettings[u.id].password;
+          u.password = (pwd === '__none__' || pwd === null || pwd === undefined) ? null : pwd;
         }
       });
-      // Update current user role if it changed
+      // Update current user if their settings changed
       if (state.currentUser) {
         const updated = USERS.find(u => u.id === state.currentUser.id);
-        if (updated) state.currentUser.role = updated.role;
+        if (updated) {
+          state.currentUser.role = updated.role;
+          state.currentUser.password = updated.password;
+        }
       }
+    } else if (data.userRoles) {
+      // Legacy support for old format
+      USERS.forEach(u => {
+        if (data.userRoles[u.id]) u.role = data.userRoles[u.id].role;
+      });
     }
     // Apply EOD settings
     if (data.eodTime) state.eodTime = data.eodTime;
@@ -438,7 +448,26 @@ function loadState() {
     if (s) { const d = JSON.parse(s); state.tickets = d.tickets || []; state.qtyGuide = d.qtyGuide || {}; state.skuNames = d.skuNames || {}; }
   } catch(e) {}
 }
-function genId() { return 'PT-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substr(2,3).toUpperCase(); }
+function genId(callback) {
+  if (!db) {
+    // Fallback if Firebase not ready
+    const ts = Date.now().toString().slice(-5);
+    callback('PT-' + ts.padStart(5,'0'));
+    return;
+  }
+  db.ref('ticketCounter').transaction(current => {
+    return (current || 0) + 1;
+  }).then(result => {
+    if (result.committed) {
+      const num = result.snapshot.val();
+      callback('PT-' + String(num).padStart(5,'0'));
+    } else {
+      callback('PT-' + String(Date.now()).slice(-5));
+    }
+  }).catch(() => {
+    callback('PT-' + String(Date.now()).slice(-5));
+  });
+}
 function updateImportStamp() {
   const el = document.getElementById('data-status');
   if (!el || !state.lastImport) return;
@@ -845,8 +874,8 @@ function resetPassword(userId) {
   user.password = newPwd;
   input.value = '';
   input.placeholder = 'Password updated ✓';
+  syncUserSettingsToFirebase();
   showAlert('✓ Password updated for ' + user.name, 'success');
-  // Refresh modal to show updated clear button
   setTimeout(() => showArchiveSettings(), 800);
 }
 
@@ -855,6 +884,7 @@ function clearPassword(userId) {
   if (!user) return;
   if (!confirm('Remove password for ' + user.name + '? They will be able to log in without a password.')) return;
   user.password = null;
+  syncUserSettingsToFirebase();
   showAlert('✓ Password cleared for ' + user.name, 'success');
   setTimeout(() => showArchiveSettings(), 500);
 }
@@ -875,10 +905,15 @@ function changeUserRole(userId, newRole) {
 
 function syncUserSettingsToFirebase() {
   if (!db) return;
-  const roles = {};
-  USERS.forEach(u => { roles[u.id] = { role: u.role }; });
+  const userSettings = {};
+  USERS.forEach(u => {
+    userSettings[u.id] = {
+      role: u.role,
+      password: u.password !== null ? u.password : '__none__'
+    };
+  });
   db.ref('settings').set({
-    userRoles: roles,
+    userSettings,
     eodTime: state.eodTime,
     eodEnabled: state.eodEnabled
   }).catch(e => console.error('Settings sync error', e));
@@ -1231,8 +1266,9 @@ function showNewTicket() {
 function createTicket() {
   const clerk = document.getElementById('nd-clerk').value.trim();
   if (!clerk) { document.getElementById('nd-clerk').style.borderColor='var(--danger)'; return; }
+  genId(function(newId) {
   const ticket = {
-    id: genId(),
+    id: newId,
     creator: clerk,
     ticketDate: document.getElementById('nd-date').value,
     orderNum: document.getElementById('nd-order').value.trim(),
@@ -1246,6 +1282,7 @@ function createTicket() {
   state.tickets.push(ticket);
   state.activeTicket = ticket.id;
   closeModal(); updateTicketList(); viewTicket(ticket.id); saveState();
+  }); // end genId callback
 }
 
 // ─── VIEW TICKET ──────────────────────────────────────────────────────────────
