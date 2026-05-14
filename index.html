@@ -210,8 +210,8 @@ let db = null;
 function initFirebase() {
   try {
     if (typeof firebase === 'undefined') {
-      console.error('Firebase SDK not loaded');
-      setSyncStatus('err');
+      // SDK not ready yet — silently return false, listenToFirebase will retry
+      setSyncStatus('connecting');
       return false;
     }
     if (!firebase.apps.length) {
@@ -220,8 +220,8 @@ function initFirebase() {
     db = firebase.database();
     return true;
   } catch(e) {
-    console.error('Firebase init error:', e);
-    setSyncStatus('err');
+    // Silent retry — don't log errors during normal startup
+    setSyncStatus('connecting');
     return false;
   }
 }
@@ -734,17 +734,52 @@ function viewArchivedTicket(id) {
 }
 
 // ─── EOD SCHEDULER ────────────────────────────────────────────────────────────
+function getEasternTime() {
+  // Get current time in Eastern timezone (handles EST/EDT automatically)
+  const now = new Date();
+  const eastern = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'}));
+  return eastern;
+}
+
+function getEasternTZ() {
+  const now = new Date();
+  const jan = new Date(now.getFullYear(),0,1).getTimezoneOffset();
+  const jul = new Date(now.getFullYear(),6,1).getTimezoneOffset();
+  return now.getTimezoneOffset() < Math.max(jan,jul) ? 'EDT' : 'EST';
+}
+
+let eodFired = false; // Prevent multiple firings in same minute
 function setupEodTimer() {
   if (eodTimer) clearInterval(eodTimer);
+  eodFired = false;
   eodTimer = setInterval(() => {
-    if (!state.eodEnabled || !isAdmin()) return;
-    const now = new Date();
+    if (!state.eodEnabled) return;
+    if (!state.currentUser) return;
+    const eastern = getEasternTime();
     const [h,m] = state.eodTime.split(':').map(Number);
-    if (now.getHours()===h && now.getMinutes()===m && now.getSeconds()<30) {
-      archiveAll(true);
-      showAlert('EOD: All tickets auto-archived at ' + state.eodTime, 'success');
+    const nowH = eastern.getHours();
+    const nowM = eastern.getMinutes();
+    const nowS = eastern.getSeconds();
+    if (nowH===h && nowM===m && nowS < 59 && !eodFired) {
+      eodFired = true;
+      // Use Firebase to coordinate — only first user to write wins
+      const eodKey = 'eod_' + eastern.toLocaleDateString('en-US').replace(/\//g,'-') + '_' + state.eodTime.replace(':','-');
+      db.ref('eodLock/' + eodKey).transaction(current => {
+        if (current === null) return true; // Claim the lock
+        return; // Already fired, abort
+      }).then(result => {
+        if (result.committed) {
+          archiveAll(true);
+          showAlert('EOD: All tickets auto-archived at ' + state.eodTime + ' ' + getEasternTZ(), 'success');
+        }
+      }).catch(() => {
+        // Fallback if transaction fails
+        if (isAdmin()) { archiveAll(true); }
+      });
     }
-  }, 15000);
+    // Reset fired flag when minute changes
+    if (!(nowH===h && nowM===m)) eodFired = false;
+  }, 10000); // Check every 10 seconds
 }
 
 function showArchiveSettings() {
@@ -753,6 +788,7 @@ function showArchiveSettings() {
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
       <div class="modal">
         <h2>📁 ARCHIVE SETTINGS</h2>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Current Eastern Time: <span style="color:var(--accent)">${getEasternTime().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} ${getEasternTZ()}</span></div>
         <div class="form-group" style="margin-bottom:16px">
           <label>EOD AUTO-ARCHIVE TIME</label>
           <input type="time" id="eod-time" value="${state.eodTime}" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--font);font-size:12px;outline:none">
