@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
@@ -734,8 +735,7 @@ function viewArchivedTicket(id) {
       </div>
       <div class="ticket-actions" style="flex-direction:column;align-items:flex-end">
         <button class="btn btn-sm" onclick="exportLoadTag('${id}',true)">🏷 Load Tag</button>
-        <button class="btn btn-sm" onclick="exportExcel('${id}',true)">⬇ Excel</button>
-        <button class="btn btn-sm" onclick="exportPDF('${id}',true)">⬇ PDF</button>
+        <button class="btn btn-sm" onclick="exportPickTicketWord('${id}',true)">📄 Pick Ticket</button>
         <button class="btn btn-sm" onclick="window.print()">🖨 Print</button>
         ${isAdmin() ? `<button class="btn btn-sm" style="border-color:var(--accent2);color:var(--accent2)" onclick="restoreTicket('${id}')">↩ Restore</button>` : ''}
       </div>
@@ -762,7 +762,7 @@ function viewArchivedTicket(id) {
   });
   html += '</tbody></table></div>';
   document.getElementById('main-panel').innerHTML = html;
-  const _t = state.tickets.find(t=>t.id===id); if(_t) setTimeout(()=>updateSkuTotals(_t),50);
+  const _t = state.tickets.find(t=>t.id===id); if(_t) setTimeout(()=>updateSkuTotals(_t),100);
 }
 
 // ─── EOD SCHEDULER ────────────────────────────────────────────────────────────
@@ -1314,41 +1314,37 @@ function viewTicket(id) {
   const fmtDate = ticket.ticketDate ? new Date(ticket.ticketDate+'T00:00:00').toLocaleDateString() : new Date(ticket.created).toLocaleDateString();
 
   let html = `
-    <div class="ticket-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
-        <div style="flex:1">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div style="font-size:20px;color:var(--accent);letter-spacing:2px">${ticket.id}</div>
-            <div style="font-size:10px;color:var(--text2);letter-spacing:2px;border:1px solid var(--border);padding:2px 8px;border-radius:4px">ORDER PICK TICKET</div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px 20px">
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">DATE</div><div style="font-size:13px">${fmtDate}</div></div>
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">CLERK</div><div style="font-size:13px">${ticket.creator||'—'}</div></div>
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">ORDER #</div><div style="font-size:13px;color:var(--accent);font-weight:bold">${ticket.orderNum||'—'}</div></div>
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICKER</div><div style="font-size:13px">${ticket.picker||'—'}</div></div>
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">DESTINATION</div><div style="font-size:13px">${ticket.dest||'—'}</div></div>
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">APPT.</div><div style="font-size:13px">${ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—'}</div></div>
-          <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICK UP DATE</div><div style="font-size:13px">${ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—'}</div></div>
-            ${ticket.notes?`<div style="grid-column:1/-1"><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">NOTES</div><div style="font-size:12px;color:var(--text2)">${ticket.notes}</div></div>`:''}
-          </div>
-        </div>
-        <div class="ticket-actions" style="flex-direction:column;align-items:flex-end">
-          <button class="btn btn-sm" onclick="exportLoadTag('${id}')">🏷 Load Tag</button>
-        <button class="btn btn-sm" onclick="editTicket('${id}')">✎ Edit</button>
-          <button class="btn btn-sm" onclick="exportExcel('${id}')">⬇ Excel</button>
-          <button class="btn btn-sm" onclick="exportPDF('${id}')">⬇ PDF</button>
-          <button class="btn btn-sm" onclick="window.print()">🖨 Print</button>
-          ${isAdmin() ? `<button class="btn btn-sm" style="border-color:var(--warning);color:var(--warning)" onclick="archiveTicket('${id}')">📁 Archive</button>` : ''}
-        <button class="btn btn-sm btn-danger" onclick="deleteTicket('${id}')">✕ Delete</button>
-        </div>
+    <div class="ticket-header" style="padding-bottom:0">
+      <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:20px;color:var(--accent);letter-spacing:2px">${ticket.id}</div>
+        <div style="font-size:10px;color:var(--text2);letter-spacing:2px;border:1px solid var(--border);padding:2px 8px;border-radius:4px">ORDER PICK TICKET</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px 20px;margin-bottom:16px">
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">DATE</div><div style="font-size:13px">${fmtDate}</div></div>
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">CLERK</div><div style="font-size:13px">${ticket.creator||'—'}</div></div>
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">ORDER #</div><div style="font-size:13px;color:var(--accent);font-weight:bold">${ticket.orderNum||'—'}</div></div>
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICKER</div><div style="font-size:13px">${ticket.picker||'—'}</div></div>
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">DESTINATION</div><div style="font-size:13px">${ticket.dest||'—'}</div></div>
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">APPT.</div><div style="font-size:13px">${ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—'}</div></div>
+        <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICK UP DATE</div><div style="font-size:13px">${ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—'}</div></div>
+        ${ticket.notes?`<div style="grid-column:1/-1"><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">NOTES</div><div style="font-size:12px;color:var(--text2)">${ticket.notes}</div></div>`:''}
+      </div>
+      <div style="display:flex;gap:8px;padding:10px 20px;margin:0 -20px;background:var(--surface2);border-top:1px solid var(--border);border-radius:0 0 10px 10px;flex-wrap:wrap">
+        <button class="btn btn-sm" style="font-weight:bold" onclick="exportLoadTag('${id}')">🏷 Load Tag</button>
+        <button class="btn btn-sm" style="font-weight:bold" onclick="editTicket('${id}')">✎ Edit</button>
+        <button class="btn btn-sm" style="font-weight:bold" onclick="exportPickTicketWord('${id}')">📄 Pick Ticket</button>
+        <button class="btn btn-sm" style="font-weight:bold" onclick="window.print()">🖨 Print</button>
+        <div style="flex:1"></div>
+        ${isAdmin() ? `<button class="btn btn-sm" style="font-weight:bold;border-color:var(--warning);color:var(--warning)" onclick="archiveTicket('${id}')">📁 Archive</button>` : ''}
+        <button class="btn btn-sm btn-danger" style="font-weight:bold" onclick="deleteTicket('${id}')">✕ Delete</button>
       </div>
     </div>
     <div class="section-title">SKU ENTRIES</div>
-    <div style="display:grid;grid-template-columns:130px 90px 70px 120px auto;gap:6px;margin-bottom:6px;padding:0 0 6px 0;border-bottom:1px solid var(--border)">
-      <div style="font-size:10px;color:var(--text2);letter-spacing:1px">SKU #</div>
-      <div style="font-size:10px;color:var(--text2);letter-spacing:1px">PCS</div>
-      <div style="font-size:10px;color:var(--text2);letter-spacing:1px;text-align:center">PALLETS</div>
-      <div style="font-size:10px;color:var(--text2);letter-spacing:1px">FLAVOR</div>
+    <div style="display:grid;grid-template-columns:130px 90px 70px 120px auto;gap:6px;margin-bottom:6px;padding:4px 0 6px 0;border-bottom:2px solid var(--border)">
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px;font-weight:bold">SKU #</div>
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px;font-weight:bold">PCS</div>
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px;text-align:center;font-weight:bold">PALLETS</div>
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px;font-weight:bold">FLAVOR</div>
       <div></div>
     </div>
     <div id="sku-inputs" style="margin-bottom:8px">${ticket.skus.map((s,i)=>renderSkuInput(s,i,id)).join('')}</div>
@@ -1385,7 +1381,7 @@ function viewTicket(id) {
     html += `</tbody></table></div>`;
   }
   document.getElementById('main-panel').innerHTML = html;
-  const _t = state.tickets.find(t=>t.id===id); if(_t) setTimeout(()=>updateSkuTotals(_t),50);
+  const _t = state.tickets.find(t=>t.id===id); if(_t) setTimeout(()=>updateSkuTotals(_t),100);
 }
 
 function updateSkuTotals(ticket) {
@@ -1479,6 +1475,134 @@ function deleteTicket(id) {
 }
 
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
+function exportPickTicketWord(id, fromArchive=false) {
+  const ticket = fromArchive
+    ? state.archivedTickets.find(t=>t.id===id)
+    : state.tickets.find(t=>t.id===id);
+  if (!ticket) return;
+
+  const computed = computeTicketLocations(ticket);
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'letter'});
+  const pageW = 279, margin = 14;
+  const centerX = pageW/2;
+  const fmtDate = ticket.ticketDate
+    ? new Date(ticket.ticketDate+'T00:00:00').toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'})
+    : new Date(ticket.created).toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'numeric'});
+
+  // ── LOGO ──────────────────────────────────────────────────────────────────
+  try { doc.addImage(LOGO_B64,'PNG', margin, 6, 50, 18); } catch(e){}
+
+  // ── TITLE ─────────────────────────────────────────────────────────────────
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(15); doc.setTextColor(30,30,30);
+  doc.text('ORDER PICK SHEET', centerX, 16, {align:'center'});
+  doc.setFontSize(9); doc.setTextColor(56,217,169);
+  doc.text(ticket.id, pageW-margin, 16, {align:'right'});
+
+  // ── HEADER BOX ────────────────────────────────────────────────────────────
+  const hY = 28, hH = 40, col2 = pageW/2;
+  doc.setDrawColor(200); doc.setLineWidth(0.3);
+  doc.rect(margin, hY, pageW-margin*2, hH);
+  doc.line(col2, hY, col2, hY+hH);
+  doc.line(margin, hY+10, pageW-margin, hY+10);
+  doc.line(margin, hY+20, pageW-margin, hY+20);
+  doc.line(margin, hY+30, pageW-margin, hY+30);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7); doc.setTextColor(130);
+  doc.text('DATE',          margin+2, hY+7);
+  doc.text('ORDER #',       margin+2, hY+17);
+  doc.text('APPT.',         margin+2, hY+27);
+  doc.text('PICK UP DATE',  margin+2, hY+37);
+  doc.text('CLERK',         col2+2,   hY+7);
+  doc.text('PICKER',        col2+2,   hY+17);
+  doc.text('DEST.',         col2+2,   hY+27);
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(9); doc.setTextColor(20);
+  doc.text(fmtDate,              margin+28, hY+7);
+  doc.text(ticket.orderNum||'—', margin+28, hY+17);
+  const _fmtAppt = ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—';
+  doc.text(_fmtAppt,             margin+28, hY+27);
+  const _fmtPickup = ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—';
+  doc.text(_fmtPickup,           margin+28, hY+37);
+  doc.text(ticket.creator||'—',  col2+22,   hY+7);
+  doc.text(ticket.picker||'—',   col2+22,   hY+17);
+  doc.text((ticket.dest||'—').substring(0,35), col2+22, hY+27);
+
+  // ── SKU TABLE ─────────────────────────────────────────────────────────────
+  const tableRows = [];
+  let totalPcs = 0, totalPallets = 0;
+  computed.forEach(c => {
+    if (!c.sku) return;
+    totalPcs += c.pcs||0;
+    totalPallets += c.palletsNeeded||0;
+    const locs = c.locations||[];
+    const groups = [];
+    for (let i=0; i<Math.max(locs.length,1); i+=LOCS_PER_ROW) groups.push(locs.slice(i,i+LOCS_PER_ROW));
+    if (!groups.length) groups.push([]);
+    groups.forEach((grp, gi) => {
+      const cells = Array(LOCS_PER_ROW).fill(null).map((_,li)=>grp[li]||null);
+      tableRows.push([
+        gi===0 ? String(c.sku) : '',
+        gi===0 ? (state.skuNames[c.sku]||'') : '',
+        gi===0 ? (c.pcs||'') : '',
+        gi===0 ? (c.palletsNeeded||'') : '',
+        cells[0]?cells[0].location:'', cells[0]?cells[0].avail:'',
+        cells[1]?cells[1].location:'', cells[1]?cells[1].avail:'',
+        cells[2]?cells[2].location:'', cells[2]?cells[2].avail:'',
+        cells[3]?cells[3].location:'', cells[3]?cells[3].avail:'',
+        gi===0 ? (c.fulfilled ? String.fromCharCode(10003) : '! -'+c.remaining) : ''
+      ]);
+    });
+  });
+  tableRows.push(['','TOTALS',totalPcs,totalPallets,'','','','','','','','','']);
+
+  doc.autoTable({
+    startY: hY + hH + 5,
+    margin: { left: margin, right: margin },
+    tableWidth: pageW - margin*2,
+    head: [['SKU#','FLAVOR','PCS','PLTS','LOC 1','A1','LOC 2','A2','LOC 3','A3','LOC 4','A4','STATUS']],
+    body: tableRows,
+    styles: { fontSize: 9, cellPadding: 2, fontStyle:'bold' },
+    headStyles: { fillColor:[40,40,40], textColor:255, fontStyle:'bold', fontSize:8 },
+    columnStyles: {
+      0:{cellWidth:24}, 1:{cellWidth:48},
+      2:{cellWidth:13,halign:'center'}, 3:{cellWidth:13,halign:'center'},
+      4:{cellWidth:24}, 5:{cellWidth:10,halign:'center'},
+      6:{cellWidth:24}, 7:{cellWidth:10,halign:'center'},
+      8:{cellWidth:24}, 9:{cellWidth:10,halign:'center'},
+      10:{cellWidth:24},11:{cellWidth:10,halign:'center'},
+      12:{cellWidth:17,halign:'center'}
+    },
+    didParseCell: function(data) {
+      if (data.row.index === tableRows.length-1) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [240,240,240];
+      }
+    }
+  });
+
+  // ── FOOTER ────────────────────────────────────────────────────────────────
+  const footY = Math.min(doc.lastAutoTable.finalY + 10, 175);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7); doc.setTextColor(100);
+  doc.text('STAGE LOC', margin, footY);
+  doc.setDrawColor(180);
+  doc.rect(margin, footY+2, pageW-margin*2, 12);
+  const verY = footY + 20;
+  doc.text('VERIFIED BY', margin, verY);
+  doc.line(margin, verY+8, col2-5, verY+8);
+  doc.text('VER. DATE', col2+5, verY);
+  doc.line(col2+5, verY+8, pageW-margin, verY+8);
+
+  // ── OPEN IN NEW TAB FOR PRINT PREVIEW ─────────────────────────────────────
+  const pdfBlob = doc.output('blob');
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  window.open(pdfUrl, '_blank');
+}
+
 function exportLoadTag(id, fromArchive=false) {
   const ticket = fromArchive
     ? state.archivedTickets.find(t=>t.id===id)
@@ -1634,34 +1758,37 @@ function exportPDF(id, fromArchive=false) {
   doc.text(ticket.id, pageW-margin, 16, {align:'right'});
 
   // ── HEADER BOX ────────────────────────────────────────────────────────────
-  const hY = 28, hH = 30, col2 = pageW/2;
+  const hY = 28, hH = 40, col2 = pageW/2;
   doc.setDrawColor(200); doc.setLineWidth(0.3);
   doc.rect(margin, hY, pageW-margin*2, hH);
   doc.line(col2, hY, col2, hY+hH);
   doc.line(margin, hY+10, pageW-margin, hY+10);
   doc.line(margin, hY+20, pageW-margin, hY+20);
+  doc.line(margin, hY+30, pageW-margin, hY+30);
 
+  // Labels
   doc.setFont('helvetica','normal');
   doc.setFontSize(7); doc.setTextColor(130);
-  doc.text('DATE',    margin+2, hY+7);
-  doc.text('ORDER #', margin+2, hY+17);
-  doc.text('APPT.',   margin+2, hY+27);
-  doc.text('PICK UP', col2+2, hY+27);
-  doc.text('CLERK',   col2+2,   hY+7);
-  doc.text('PICKER',  col2+2,   hY+17);
-  doc.text('DEST.',   col2+2,   hY+27);
+  doc.text('DATE',      margin+2, hY+7);
+  doc.text('ORDER #',   margin+2, hY+17);
+  doc.text('APPT.',     margin+2, hY+27);
+  doc.text('PICK UP DATE', margin+2, hY+37);
+  doc.text('CLERK',     col2+2,   hY+7);
+  doc.text('PICKER',    col2+2,   hY+17);
+  doc.text('DEST.',     col2+2,   hY+27);
 
+  // Values
   doc.setFont('helvetica','bold');
   doc.setFontSize(9); doc.setTextColor(20);
-  doc.text(fmtDate,              margin+22, hY+7);
-  doc.text(ticket.orderNum||'—', margin+22, hY+17);
+  doc.text(fmtDate,              margin+28, hY+7);
+  doc.text(ticket.orderNum||'—', margin+28, hY+17);
   const _fmtAppt = ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—';
-  doc.text(_fmtAppt, margin+22, hY+27);
+  doc.text(_fmtAppt,             margin+28, hY+27);
   const _fmtPickup = ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—';
-  doc.text(_fmtPickup, col2+22, hY+27);
+  doc.text(_fmtPickup,           margin+28, hY+37);
   doc.text(ticket.creator||'—',  col2+22,   hY+7);
   doc.text(ticket.picker||'—',   col2+22,   hY+17);
-  doc.text(ticket.dest||'—',     col2+22,   hY+27);
+  doc.text((ticket.dest||'—').substring(0,35), col2+22, hY+27);
 
   // ── SKU TABLE ─────────────────────────────────────────────────────────────
   const tableRows = [];
@@ -1696,7 +1823,7 @@ function exportPDF(id, fromArchive=false) {
   tableRows.push(['','TOTALS',totalPcs,totalPallets,'','','','','','','','','']);
 
   doc.autoTable({
-    startY: hY + hH + 4,
+    startY: hY + hH + 5,
     margin: { left: margin, right: margin },
     tableWidth: pageW - margin*2,
     head: [['SKU#','FLAVOR','PCS','PLTS','LOC 1','A1','LOC 2','A2','LOC 3','A3','LOC 4','A4','STATUS']],
