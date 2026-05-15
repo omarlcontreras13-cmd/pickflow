@@ -762,6 +762,7 @@ function viewArchivedTicket(id) {
   });
   html += '</tbody></table></div>';
   document.getElementById('main-panel').innerHTML = html;
+  const _t = state.tickets.find(t=>t.id===id); if(_t) setTimeout(()=>updateSkuTotals(_t),50);
 }
 
 // ─── EOD SCHEDULER ────────────────────────────────────────────────────────────
@@ -1343,7 +1344,20 @@ function viewTicket(id) {
       </div>
     </div>
     <div class="section-title">SKU ENTRIES</div>
-    <div id="sku-inputs" style="margin-bottom:16px">${ticket.skus.map((s,i)=>renderSkuInput(s,i,id)).join('')}</div>
+    <div style="display:grid;grid-template-columns:130px 90px 70px 120px auto;gap:6px;margin-bottom:6px;padding:0 0 6px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px">SKU #</div>
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px">PCS</div>
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px;text-align:center">PALLETS</div>
+      <div style="font-size:10px;color:var(--text2);letter-spacing:1px">FLAVOR</div>
+      <div></div>
+    </div>
+    <div id="sku-inputs" style="margin-bottom:8px">${ticket.skus.map((s,i)=>renderSkuInput(s,i,id)).join('')}</div>
+    <div id="sku-totals-row" style="display:grid;grid-template-columns:130px 90px 70px 120px auto;gap:6px;padding:6px 0;border-top:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text2);font-weight:bold" id="totals-sku-count">TOTALS</div>
+      <div style="font-size:12px;font-weight:bold;color:var(--accent)" id="totals-pcs">—</div>
+      <div style="font-size:12px;font-weight:bold;color:var(--accent2);text-align:center" id="totals-plts">—</div>
+      <div></div><div></div>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:20px">
       <button class="btn btn-sm" onclick="addSkuRow('${id}')">+ Add SKU Row</button>
       <button class="btn btn-sm btn-primary" onclick="viewTicket('${id}')">↻ Refresh Locations</button>
@@ -1371,18 +1385,44 @@ function viewTicket(id) {
     html += `</tbody></table></div>`;
   }
   document.getElementById('main-panel').innerHTML = html;
+  const _t = state.tickets.find(t=>t.id===id); if(_t) setTimeout(()=>updateSkuTotals(_t),50);
+}
+
+function updateSkuTotals(ticket) {
+  const validSkus = (ticket.skus||[]).filter(s=>s.sku&&s.pcs);
+  const totalPcs = validSkus.reduce((sum,s)=>sum+(s.pcs||0),0);
+  const totalPlts = validSkus.reduce((sum,s)=>{
+    const pq = state.qtyGuide[(s.sku||'').trim()]||0;
+    return sum + (pq ? Math.floor(s.pcs/pq) : 0);
+  },0);
+  const countEl = document.getElementById('totals-sku-count');
+  const pcsEl = document.getElementById('totals-pcs');
+  const pltsEl = document.getElementById('totals-plts');
+  if (countEl) countEl.textContent = 'TOTALS (' + validSkus.length + ' SKUs)';
+  if (pcsEl) pcsEl.textContent = totalPcs.toLocaleString();
+  if (pltsEl) pltsEl.textContent = totalPlts;
 }
 
 function renderSkuInput(sku,idx,tid) {
-  return `<div class="sku-row-input">
+  const pq = sku.sku ? (state.qtyGuide[sku.sku.trim()]||0) : 0;
+  const pallets = pq && sku.pcs ? Math.floor(sku.pcs/pq) : 0;
+  const skuName = sku.sku ? (state.skuNames[sku.sku.trim()]||'') : '';
+  return `<div class="sku-row-input" style="grid-template-columns:130px 90px 70px 120px auto;gap:6px;align-items:center">
     <input type="text" placeholder="SKU #" value="${sku.sku||''}" onchange="updateSku('${tid}',${idx},'sku',this.value)" style="width:100%">
     <input type="number" placeholder="PCS" value="${sku.pcs||''}" onchange="updateSku('${tid}',${idx},'pcs',this.value)" style="width:100%">
+    <div style="text-align:center;font-size:12px;font-weight:bold;color:${pallets>0?'var(--accent2)':'var(--text2)'};background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:5px 4px">${pallets||'—'}</div>
+    <div style="font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${skuName}">${skuName||'—'}</div>
     <button onclick="removeSkuRow('${tid}',${idx})" ${idx===0?'style="visibility:hidden;':'style="'}background:none;border:1px solid var(--danger);color:var(--danger);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:10px;font-family:var(--font);line-height:1">✕</button>
   </div>`;
 }
 function updateSku(tid,idx,field,val) {
   const t=state.tickets.find(t=>t.id===tid); if(!t) return;
-  t.skus[idx][field]=field==='pcs'?parseFloat(val)||0:val.trim(); saveState();
+  t.skus[idx][field]=field==='pcs'?parseFloat(val)||0:val.trim();
+  // Re-render inputs to update pallet count and totals
+  const inputsEl = document.getElementById('sku-inputs');
+  if (inputsEl) inputsEl.innerHTML = t.skus.map((s,i)=>renderSkuInput(s,i,tid)).join('');
+  updateSkuTotals(t);
+  saveState();
 }
 function addSkuRow(tid) {
   const t=state.tickets.find(t=>t.id===tid); if(!t) return;
