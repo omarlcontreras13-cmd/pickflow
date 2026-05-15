@@ -728,7 +728,8 @@ function viewArchivedTicket(id) {
           <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">ORDER #</div><div style="font-size:13px;color:var(--accent);font-weight:bold">${ticket.orderNum||'—'}</div></div>
           <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICKER</div><div style="font-size:13px">${ticket.picker||'—'}</div></div>
           <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">DESTINATION</div><div style="font-size:13px">${ticket.dest||'—'}</div></div>
-          <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">APPT.</div><div style="font-size:13px">${ticket.appt||'—'}</div></div>
+          <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">APPT.</div><div style="font-size:13px">${ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—'}</div></div>
+          <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICK UP DATE</div><div style="font-size:13px">${ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—'}</div></div>
         </div>
       </div>
       <div class="ticket-actions" style="flex-direction:column;align-items:flex-end">
@@ -1252,7 +1253,9 @@ function showNewTicket() {
           <div class="form-group"><label>ORDER #</label><input type="text" id="nd-order" placeholder="e.g. 80070981"></div>
           <div class="form-group"><label>PICKER</label><input type="text" id="nd-picker" placeholder="Picker name"></div>
           <div class="form-group"><label>DESTINATION</label><input type="text" id="nd-dest" placeholder="e.g. Canada Dry Delaware"></div>
-          <div class="form-group"><label>APPT.</label><input type="text" id="nd-appt" placeholder="e.g. 2:00 PM"></div>
+          <div class="form-group"><label>APPT. TIME</label><input type="time" id="nd-appt" placeholder="e.g. 2:00 PM"></div>
+          <div class="form-group"><label>PICK UP DATE</label><input type="date" id="nd-pickup"></div>
+          <div style="grid-column:1/-1"></div>
         </div>
         <div class="form-group" style="margin-bottom:16px"><label>NOTES (optional)</label><input type="text" id="nd-notes" placeholder="Additional notes"></div>
         <div class="modal-actions">
@@ -1276,6 +1279,7 @@ function createTicket() {
     picker: document.getElementById('nd-picker').value.trim(),
     dest: document.getElementById('nd-dest').value.trim(),
     appt: document.getElementById('nd-appt').value.trim(),
+    pickupDate: document.getElementById('nd-pickup').value,
     notes: document.getElementById('nd-notes').value.trim(),
     created: Date.now(),
     skus: [{sku:'',pcs:0}]
@@ -1322,7 +1326,8 @@ function viewTicket(id) {
             <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">ORDER #</div><div style="font-size:13px;color:var(--accent);font-weight:bold">${ticket.orderNum||'—'}</div></div>
             <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICKER</div><div style="font-size:13px">${ticket.picker||'—'}</div></div>
             <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">DESTINATION</div><div style="font-size:13px">${ticket.dest||'—'}</div></div>
-            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">APPT.</div><div style="font-size:13px">${ticket.appt||'—'}</div></div>
+            <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">APPT.</div><div style="font-size:13px">${ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—'}</div></div>
+          <div><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">PICK UP DATE</div><div style="font-size:13px">${ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—'}</div></div>
             ${ticket.notes?`<div style="grid-column:1/-1"><div style="font-size:10px;color:var(--text2);letter-spacing:1px;margin-bottom:2px">NOTES</div><div style="font-size:12px;color:var(--text2)">${ticket.notes}</div></div>`:''}
           </div>
         </div>
@@ -1372,7 +1377,7 @@ function renderSkuInput(sku,idx,tid) {
   return `<div class="sku-row-input">
     <input type="text" placeholder="SKU #" value="${sku.sku||''}" onchange="updateSku('${tid}',${idx},'sku',this.value)" style="width:100%">
     <input type="number" placeholder="PCS" value="${sku.pcs||''}" onchange="updateSku('${tid}',${idx},'pcs',this.value)" style="width:100%">
-    <button class="btn btn-sm btn-danger" onclick="removeSkuRow('${tid}',${idx})" ${idx===0?'style="visibility:hidden"':''}>✕</button>
+    <button onclick="removeSkuRow('${tid}',${idx})" ${idx===0?'style="visibility:hidden;':'style="'}background:none;border:1px solid var(--danger);color:var(--danger);border-radius:4px;padding:2px 7px;cursor:pointer;font-size:10px;font-family:var(--font);line-height:1">✕</button>
   </div>`;
 }
 function updateSku(tid,idx,field,val) {
@@ -1401,7 +1406,9 @@ function editTicket(id) {
           <div class="form-group"><label>ORDER #</label><input type="text" id="ed-order" value="${t.orderNum||''}"></div>
           <div class="form-group"><label>PICKER</label><input type="text" id="ed-picker" value="${t.picker||''}"></div>
           <div class="form-group"><label>DESTINATION</label><input type="text" id="ed-dest" value="${t.dest||''}"></div>
-          <div class="form-group"><label>APPT.</label><input type="text" id="ed-appt" value="${t.appt||''}"></div>
+          <div class="form-group"><label>APPT. TIME</label><input type="time" id="ed-appt" value="${t.appt||''}"></div>
+          <div class="form-group"><label>PICK UP DATE</label><input type="date" id="ed-pickup" value="${t.pickupDate||''}"></div>
+          <div style="grid-column:1/-1"></div>
         </div>
         <div class="form-group" style="margin-bottom:16px"><label>NOTES</label><input type="text" id="ed-notes" value="${t.notes||''}"></div>
         <div class="modal-actions">
@@ -1419,6 +1426,7 @@ function saveEdit(id) {
   t.picker=document.getElementById('ed-picker').value.trim();
   t.dest=document.getElementById('ed-dest').value.trim();
   t.appt=document.getElementById('ed-appt').value.trim();
+  t.pickupDate=document.getElementById('ed-pickup').value;
   t.notes=document.getElementById('ed-notes').value.trim();
   closeModal(); viewTicket(id); saveState();
 }
@@ -1474,7 +1482,9 @@ function exportLoadTag(id, fromArchive=false) {
     doc.setFontSize(18); doc.setTextColor(120,120,120);
     doc.text('APPT.', centerX, 165, {align:'center'});
     doc.setFontSize(40); doc.setTextColor(20,20,20);
-    doc.text(ticket.appt||'—', centerX, 186, {align:'center'});
+    const _apptDisplay = ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—';
+  const _pickupDisplay = ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '';
+  doc.text(_apptDisplay + (_pickupDisplay ? '   |   ' + _pickupDisplay : ''), centerX, 186, {align:'center'});
   }
 
   // Copy 1
@@ -1596,6 +1606,7 @@ function exportPDF(id, fromArchive=false) {
   doc.text('DATE',    margin+2, hY+7);
   doc.text('ORDER #', margin+2, hY+17);
   doc.text('APPT.',   margin+2, hY+27);
+  doc.text('PICK UP', col2+2, hY+27);
   doc.text('CLERK',   col2+2,   hY+7);
   doc.text('PICKER',  col2+2,   hY+17);
   doc.text('DEST.',   col2+2,   hY+27);
@@ -1604,7 +1615,10 @@ function exportPDF(id, fromArchive=false) {
   doc.setFontSize(9); doc.setTextColor(20);
   doc.text(fmtDate,              margin+22, hY+7);
   doc.text(ticket.orderNum||'—', margin+22, hY+17);
-  doc.text(ticket.appt||'—',     margin+22, hY+27);
+  const _fmtAppt = ticket.appt ? new Date('1970-01-01T'+ticket.appt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '—';
+  doc.text(_fmtAppt, margin+22, hY+27);
+  const _fmtPickup = ticket.pickupDate ? new Date(ticket.pickupDate+'T00:00:00').toLocaleDateString() : '—';
+  doc.text(_fmtPickup, col2+22, hY+27);
   doc.text(ticket.creator||'—',  col2+22,   hY+7);
   doc.text(ticket.picker||'—',   col2+22,   hY+17);
   doc.text(ticket.dest||'—',     col2+22,   hY+27);
@@ -1695,6 +1709,46 @@ function exportPDF(id, fromArchive=false) {
 }
 
 // ─── DATA PREVIEW ─────────────────────────────────────────────────────────────
+function applyInvFilter(field, value) {
+  window.invFilters = {...(window.invFilters||{}), [field]: value};
+  // Update just the results table without re-rendering the whole tab
+  const skuF = (window.invFilters.sku||'').trim();
+  const locF = (window.invFilters.loc||'').trim().toLowerCase();
+  const lotF = (window.invFilters.lot||'').trim().toLowerCase();
+  const poF = (window.invFilters.po||'').trim().toLowerCase();
+  let filtered = state.rawInventory.length ? state.rawInventory : state.inventory;
+  if (skuF) filtered = filtered.filter(r=>r.sku.includes(skuF));
+  if (locF) filtered = filtered.filter(r=>r.location.toLowerCase().includes(locF));
+  if (lotF) filtered = filtered.filter(r=>(r.lot||'').toLowerCase().includes(lotF));
+  if (poF) filtered = filtered.filter(r=>(r.po||'').toLowerCase().includes(poF));
+  const ps=50, tot=filtered.length, pg=Math.ceil(tot/ps)||1;
+  const sl = filtered.slice(0, ps);
+  const isFiltered = skuF||locF||lotF||poF;
+  document.getElementById('inv-results').innerHTML =
+    `<div style="font-size:11px;color:var(--text2);margin-bottom:8px">Showing 1–${Math.min(ps,tot)} of ${tot.toLocaleString()} records${isFiltered?' (filtered)':''} &nbsp;
+    <span style="float:right">${pg>1?`<button class="btn btn-sm" onclick="switchTab('inventory',1)">Next →</button>`:''}</span></div>` +
+    `<table class="sku-table" style="font-size:11px"><thead><tr>
+      <th>SKU</th><th>NAME</th><th>PO #</th><th>PCS</th><th>PCS PENDING</th>
+      <th>STATUS</th><th>LOT #</th><th>SKID ID</th><th>LOCATION</th>
+      <th>EXP DATE</th><th>GROSS WT</th><th>INBOUND BOL</th>
+    </tr></thead><tbody>` +
+    (sl.length ? sl.map(r=>`<tr>
+      <td style="color:var(--accent)">${r.sku}</td>
+      <td style="color:var(--text2)">${state.skuNames[r.sku]||'—'}</td>
+      <td style="color:var(--text2)">${r.po||'—'}</td>
+      <td>${r.pcs}</td>
+      <td style="${r.pcsPending>0?'color:var(--warning);font-weight:bold':''}">${r.pcsPending||0}</td>
+      <td style="color:var(--accent2)">${r.status||'—'}</td>
+      <td style="color:var(--text2)">${r.lot||'—'}</td>
+      <td style="color:var(--text2)">${r.skid||'—'}</td>
+      <td>${r.location}</td>
+      <td style="color:var(--text2)">${r.expDate?r.expDate.toLocaleDateString():'—'}</td>
+      <td style="color:var(--text2)">${r.grossWt||'—'}</td>
+      <td style="color:var(--text2)">${r.bol||'—'}</td>
+    </tr>`).join('') : '<tr><td colspan="12" style="text-align:center;color:var(--text2);padding:20px">No records match</td></tr>') +
+    `</tbody></table>`;
+}
+
 function showDataPreview() {
   if (!state.dataLoaded) { showAlert('No data loaded yet.','warning'); return; }
   state.activeTicket=null; updateTicketList();
@@ -1757,19 +1811,19 @@ function showDataPreview() {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;margin-bottom:12px;align-items:flex-end">
           <div class="form-group">
             <label>FILTER BY SKU</label>
-            <input type="text" id="inv-sku-filter" placeholder="e.g. 4021579" value="${(window.invFilters||{}).sku||''}" oninput="window.invFilters={...window.invFilters||{},sku:this.value};switchTab('inventory',0)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
+            <input type="text" id="inv-sku-filter" placeholder="e.g. 4021579" value="${(window.invFilters||{}).sku||''}" oninput="applyInvFilter('sku',this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
           </div>
           <div class="form-group">
             <label>FILTER BY LOCATION</label>
-            <input type="text" id="inv-loc-filter" placeholder="e.g. 22-15" value="${(window.invFilters||{}).loc||''}" oninput="window.invFilters={...window.invFilters||{},loc:this.value};switchTab('inventory',0)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
+            <input type="text" id="inv-loc-filter" placeholder="e.g. 22-15" value="${(window.invFilters||{}).loc||''}" oninput="applyInvFilter('loc',this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
           </div>
           <div class="form-group">
             <label>FILTER BY LOT #</label>
-            <input type="text" id="inv-lot-filter" placeholder="e.g. M24U372" value="${(window.invFilters||{}).lot||''}" oninput="window.invFilters={...window.invFilters||{},lot:this.value};switchTab('inventory',0)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
+            <input type="text" id="inv-lot-filter" placeholder="e.g. M24U372" value="${(window.invFilters||{}).lot||''}" oninput="applyInvFilter('lot',this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
           </div>
           <div class="form-group">
             <label>FILTER BY PO #</label>
-            <input type="text" id="inv-po-filter" placeholder="e.g. 4600002710" value="${(window.invFilters||{}).po||''}" oninput="window.invFilters={...window.invFilters||{},po:this.value};switchTab('inventory',0)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
+            <input type="text" id="inv-po-filter" placeholder="e.g. 4600002710" value="${(window.invFilters||{}).po||''}" oninput="applyInvFilter('po',this.value)" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;width:100%">
           </div>
           <div>
             <button class="btn btn-sm" onclick="window.invFilters={sku:'',loc:'',lot:'',po:''};switchTab('inventory',0)">✕ Clear</button>
@@ -1815,6 +1869,7 @@ function showDataPreview() {
         `</tbody></table>`;
     }
     document.getElementById('pcontent').innerHTML=html;
+    if (tab==='inventory') setTimeout(()=>applyInvFilter('sku',(window.invFilters||{}).sku||''),50);
   };
 
   document.getElementById('main-panel').innerHTML=`
