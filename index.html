@@ -1563,6 +1563,9 @@ function exportPickTicketWord(id, fromArchive=false) {
     startY: hY + hH + 5,
     margin: { left: margin, right: margin },
     tableWidth: pageW - margin*2,
+    showHead: 'everyPage',
+    pageBreak: 'auto',
+    rowPageBreak: 'avoid',
     head: [['SKU#','FLAVOR','PCS','PLTS','LOC 1','A1','LOC 2','A2','LOC 3','A3','LOC 4','A4','STATUS']],
     body: tableRows,
     styles: { fontSize: 9, cellPadding: 2, fontStyle:'bold' },
@@ -1584,8 +1587,17 @@ function exportPickTicketWord(id, fromArchive=false) {
     }
   });
 
-  // ── FOOTER ────────────────────────────────────────────────────────────────
-  const footY = Math.min(doc.lastAutoTable.finalY + 10, 175);
+  // ── FOOTER — only on last page, add new page if not enough room ──────────
+  const pageH = 216; // landscape letter height in mm
+  const footerH = 42; // space needed for footer
+  let footY = doc.lastAutoTable.finalY + 10;
+
+  // If not enough room for footer, add a new page
+  if (footY + footerH > pageH - 10) {
+    doc.addPage();
+    footY = 20;
+  }
+
   doc.setFont('helvetica','normal');
   doc.setFontSize(7); doc.setTextColor(100);
   doc.text('STAGE LOC', margin, footY);
@@ -1826,6 +1838,9 @@ function exportPDF(id, fromArchive=false) {
     startY: hY + hH + 5,
     margin: { left: margin, right: margin },
     tableWidth: pageW - margin*2,
+    showHead: 'everyPage',
+    pageBreak: 'auto',
+    rowPageBreak: 'avoid',
     head: [['SKU#','FLAVOR','PCS','PLTS','LOC 1','A1','LOC 2','A2','LOC 3','A3','LOC 4','A4','STATUS']],
     body: tableRows,
     styles: { fontSize: 9, cellPadding: 2, fontStyle:'bold' },
