@@ -786,34 +786,47 @@ let eodFired = false; // Prevent multiple firings in same minute
 function setupEodTimer() {
   if (eodTimer) clearInterval(eodTimer);
   eodFired = false;
+  let lastCheckedDay = '';
+
   eodTimer = setInterval(() => {
     if (!state.eodEnabled) return;
     if (!state.currentUser) return;
+    if (!state.eodTime) return;
+
     const eastern = getEasternTime();
-    const [h,m] = state.eodTime.split(':').map(Number);
+    const [h, m] = state.eodTime.split(':').map(Number);
     const nowH = eastern.getHours();
     const nowM = eastern.getMinutes();
-    const nowS = eastern.getSeconds();
-    if (nowH===h && nowM===m && nowS < 59 && !eodFired) {
+    const todayKey = eastern.toLocaleDateString('en-US') + '_' + state.eodTime;
+
+    // Reset fired flag each new day
+    if (lastCheckedDay && lastCheckedDay !== eastern.toLocaleDateString('en-US')) {
+      eodFired = false;
+    }
+    lastCheckedDay = eastern.toLocaleDateString('en-US');
+
+    // Fire if within the target minute and not already fired today
+    if (nowH === h && nowM === m && !eodFired) {
       eodFired = true;
-      // Use Firebase to coordinate — only first user to write wins
-      const eodKey = 'eod_' + eastern.toLocaleDateString('en-US').replace(/\//g,'-') + '_' + state.eodTime.replace(':','-');
+      if (!db) {
+        // No Firebase - just archive directly if admin
+        if (isAdmin()) { archiveAll(true); showAlert('EOD: Tickets auto-archived.', 'success'); }
+        return;
+      }
+      const eodKey = 'eod_' + todayKey.replace(/[/:]/g, '-').replace(/\s/g, '_');
       db.ref('eodLock/' + eodKey).transaction(current => {
-        if (current === null) return true; // Claim the lock
-        return; // Already fired, abort
+        if (current === null) return true; // claim lock
+        return undefined; // already fired
       }).then(result => {
         if (result.committed) {
           archiveAll(true);
-          showAlert('EOD: All tickets auto-archived at ' + state.eodTime + ' ' + getEasternTZ(), 'success');
+          showAlert('EOD: All tickets auto-archived at ' + state.eodTime + ' ET', 'success');
         }
       }).catch(() => {
-        // Fallback if transaction fails
-        if (isAdmin()) { archiveAll(true); }
+        if (isAdmin()) { archiveAll(true); showAlert('EOD: Tickets auto-archived.', 'success'); }
       });
     }
-    // Reset fired flag when minute changes
-    if (!(nowH===h && nowM===m)) eodFired = false;
-  }, 10000); // Check every 10 seconds
+  }, 5000); // Check every 5 seconds for reliability
 }
 
 function showArchiveSettings() {
