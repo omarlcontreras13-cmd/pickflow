@@ -1267,13 +1267,16 @@ function computeTicketLocations(ticket) {
     if (!pq) return { ...sr, palletQty:0, palletsNeeded:0, locations:[], rows:[], error:'SKU not in QTY guide' };
     const need = Math.floor((sr.pcs||0) / pq);
     const locs = []; let rem = need;
+    const MIN_DISPLAY_AVAIL = 5; // always show enough locations to total at least 5 avail pallets
     state.helper.filter(h => h.sku === sr.sku).sort((a,b) => a.rank - b.rank).forEach(row => {
-      if (rem <= 0) return;
       const key = sr.sku + '|' + row.location;
       const avail = Math.max(0, row.availPallets - (prior[key] || 0));
       if (avail <= 0) return;
-      const assign = Math.min(rem, avail);
-      locs.push({ location:row.location, avail, assigned:assign, rank:row.rank, exp:row.oldestExp });
+      const totalDisplayed = locs.reduce((s,l) => s + l.avail, 0);
+      // Only extend display to 5 avail when the line requests exactly 1 pallet
+      if (rem <= 0 && (need !== 1 || totalDisplayed >= MIN_DISPLAY_AVAIL)) return;
+      const assign = rem > 0 ? Math.min(rem, avail) : 0; // 0 = display only
+      locs.push({ location:row.location, avail, assigned:assign, rank:row.rank, exp:row.oldestExp, displayOnly: assign===0 });
       rem -= assign;
     });
     const rows = [];
