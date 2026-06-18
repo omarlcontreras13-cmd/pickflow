@@ -79,6 +79,13 @@
   .alert-success { background: rgba(56,217,169,0.1); border: 1px solid rgba(56,217,169,0.3); color: var(--accent2); }
   .alert-warning { background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); color: var(--warning); }
   .alert-danger { background: rgba(240,101,101,0.1); border: 1px solid rgba(240,101,101,0.3); color: var(--danger); }
+  .toast-host { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:10001; display:flex; flex-direction:column; gap:12px; align-items:center; pointer-events:none; width:max-content; max-width:90vw; }
+  .toast { pointer-events:auto; min-width:340px; max-width:620px; padding:20px 30px; border-radius:14px; font-size:16px; line-height:1.6; text-align:center; color:var(--text); background:var(--surface); border:2px solid var(--border); box-shadow:0 18px 50px rgba(26,31,54,0.28); animation:toastIn .18s ease-out; }
+  .toast-success { border-color:var(--accent2); }
+  .toast-info { border-color:var(--accent); }
+  .toast-warning { border-color:var(--warning); }
+  .toast-danger { border-color:var(--danger); }
+  @keyframes toastIn { from{opacity:0; transform:translateY(8px) scale(.96)} to{opacity:1; transform:translateY(0) scale(1)} }
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
   .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
   .empty-state h3 { font-size: 14px; color: var(--text); margin-bottom: 8px; }
@@ -262,7 +269,7 @@ function syncInventoryToFirebase() {
     s: r.sku, p: r.pcs, l: r.location,
     e: r.expDate ? r.expDate.getTime() : null,
     lot: r.lot||'', skid: r.skid||'', po: r.po||'',
-    gw: r.grossWt||'', bol: r.bol||'', pp: r.pcsPending||0, pi2: r.prodId2||''
+    gw: r.grossWt||'', bol: r.bol||'', pp: r.pcsPending||0, pi2: r.prodId2||'', cu: r.customer||''
   }));
   db.ref('inventory').set(compact)
     .then(() => showAlert('✓ Inventory synced to all users.', 'success'))
@@ -272,7 +279,7 @@ function syncInventoryToFirebase() {
     s: r.sku, p: r.pcs, l: r.location,
     e: r.expDate ? r.expDate.getTime() : null,
     st: r.status||'', lot: r.lot||'', skid: r.skid||'',
-    po: r.po||'', gw: r.grossWt||'', bol: r.bol||'', pp: r.pcsPending||0, pi2: r.prodId2||''
+    po: r.po||'', gw: r.grossWt||'', bol: r.bol||'', pp: r.pcsPending||0, pi2: r.prodId2||'', cu: r.customer||''
   }));
   db.ref('rawInventory').set(rawCompact).catch(e => console.error('Raw inv sync error', e));
 }
@@ -380,10 +387,10 @@ function listenToFirebase() {
     const data = snap.val();
     if (data && Array.isArray(data) && data.length > 0) {
       state.rawInventory = data.map(r => ({
-        sku: r.s, pcs: r.p, location: r.l,
-        expDate: r.e ? new Date(r.e) : null,
-        status: r.st||'AVAILABLE', lot: r.lot||'', skid: r.skid||'',
-        po: r.po||'', grossWt: r.gw||'', bol: r.bol||'', pcsPending: r.pp||0, prodId2: r.pi2||''
+        sku: r.s ?? r.sku, pcs: r.p ?? r.pcs, location: r.l ?? r.location,
+        expDate: (r.e ?? r.expDate) ? new Date(r.e ?? r.expDate) : null,
+        status: r.st ?? r.status ?? 'AVAILABLE', lot: r.lot||'', skid: r.skid||'',
+        po: r.po||'', grossWt: r.gw ?? r.grossWt ?? '', bol: r.bol||'', pcsPending: r.pp ?? r.pcsPending ?? 0, prodId2: r.pi2 ?? r.prodId2 ?? '', customer: r.cu ?? r.customer ?? ''
       }));
       try { localStorage.setItem('pickflow_rawinv', JSON.stringify(state.rawInventory)); } catch(e) {}
     }
@@ -393,11 +400,11 @@ function listenToFirebase() {
     const data = snap.val();
     if (data && Array.isArray(data) && data.length > 0) {
       state.inventory = data.map(r => ({
-        sku: r.s, pcs: r.p, location: r.l,
-        expDate: r.e ? new Date(r.e) : null,
+        sku: r.s ?? r.sku, pcs: r.p ?? r.pcs, location: r.l ?? r.location,
+        expDate: (r.e ?? r.expDate) ? new Date(r.e ?? r.expDate) : null,
         status: 'AVAILABLE',
         lot: r.lot||'', skid: r.skid||'', po: r.po||'',
-        grossWt: r.gw||'', bol: r.bol||'', pcsPending: r.pp||0, prodId2: r.pi2||''
+        grossWt: r.gw ?? r.grossWt ?? '', bol: r.bol||'', pcsPending: r.pp ?? r.pcsPending ?? 0, prodId2: r.pi2 ?? r.prodId2 ?? '', customer: r.cu ?? r.customer ?? ''
       }));
       // Also load rawInventory if available
       const raw = snap.val();
@@ -1000,7 +1007,7 @@ function showImport() {
         <div style="display:flex;flex-direction:column;gap:8px;margin:16px 0">
           <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
             <input type="radio" name="itype" value="data" ${qtyLoaded?'checked':''} style="margin-top:2px">
-            <div><div style="color:var(--text)">Daily Inventory File</div><div style="color:var(--text2);font-size:11px;">Today's inventory export — any filename, auto-detects headers</div></div>
+            <div><div style="color:var(--text)">Daily Inventory File</div><div style="color:var(--text2);font-size:11px;">Electrolit or Nexus export — customer is read from the file; replaces only that customer's on-hand, others untouched</div></div>
           </label>
           <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
             <input type="radio" name="itype" value="qty" ${!qtyLoaded?'checked':''} style="margin-top:2px">
@@ -1010,6 +1017,11 @@ function showImport() {
             <input type="radio" name="itype" value="capref" style="margin-top:2px">
             <div><div style="color:var(--text)">Location Capacity Reference</div><div style="color:var(--text2);font-size:11px;">Max pallet capacity per location (Col F: Location, Col H: Capacity) — saved permanently</div></div>
           </label>
+          ${isAdmin() ? `
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
+            <input type="radio" name="itype" value="clear" style="margin-top:2px">
+            <div><div style="color:var(--danger);font-weight:bold">Clear All Inventory</div><div style="color:var(--text2);font-size:11px;">Remove all on-hand inventory and start fresh (keeps tickets) — Admin only</div></div>
+          </label>` : ''}
         </div>
         <button class="btn btn-primary" onclick="triggerImport()" style="width:100%">Choose File →</button>
         <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button></div>
@@ -1017,8 +1029,77 @@ function showImport() {
     </div>`;
 }
 
+function exportQtyGuide() {
+  // Build the full SKU set: everything in the QTY guide PLUS every SKU seen in inventory,
+  // so SKUs still missing a pallet qty / name show up as blank rows you can fill in.
+  const src = state.rawInventory.length ? state.rawInventory : state.inventory;
+  const skuCust = {};
+  src.forEach(r => { if (r.sku && !(r.sku in skuCust)) skuCust[r.sku] = r.customer || ''; });
+  const allSkus = new Set([...Object.keys(state.qtyGuide), ...Object.keys(skuCust)]);
+  if (!allSkus.size) { showAlert('No SKUs yet — import inventory or a QTY guide first.', 'warning'); return; }
+  const data = [...allSkus].sort().map(sku => ({
+    'SKU': sku,
+    'NAME': state.skuNames[sku] || '',
+    'QTY PER PALLET': (state.qtyGuide[sku] != null ? state.qtyGuide[sku] : ''),
+    'CUSTOMER': skuCust[sku] || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(data, { header:['SKU','NAME','QTY PER PALLET','CUSTOMER'] });
+  ws['!cols'] = [{wch:16},{wch:40},{wch:16},{wch:16}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'QTY Guide');
+  const d = new Date();
+  const stamp = d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  XLSX.writeFile(wb, 'PickFlow_6049_QTYGuide_'+stamp+'.xlsx');
+  const missing = data.filter(x => x['QTY PER PALLET']==='').length;
+  showAlert('✓ Exported '+data.length+' SKUs'+(missing?(' — '+missing+' still need a pallet qty'):'')+'. Edit and re-import as QTY Guide File.', 'success');
+}
+
+function exportInventoryExcel() {
+  const src = state.rawInventory.length ? state.rawInventory : state.inventory;
+  if (!src.length) { showAlert('No inventory to export — import a daily inventory file first.', 'warning'); return; }
+  // Use currently filtered inventory (respects all active Preview filters) — same as 6021
+  const f = window.invFilters || {};
+  let rows = src;
+  if (f.cust) rows = rows.filter(r => (r.customer||'')===f.cust);
+  if (f.sku)  rows = rows.filter(r => (r.sku||'').toLowerCase().includes(f.sku.trim().toLowerCase()));
+  if (f.loc)  rows = rows.filter(r => (r.location||'').toLowerCase().includes(f.loc.trim().toLowerCase()));
+  if (f.lot)  rows = rows.filter(r => (r.lot||'').toLowerCase().includes(f.lot.trim().toLowerCase()));
+  if (f.po)   rows = rows.filter(r => (r.po||'').toLowerCase().includes(f.po.trim().toLowerCase()));
+
+  const data = [['CUSTOMER','SKU','NAME','PO #','PCS','PCS PENDING','INVENTORY STATUS','LOT #','SKID ID','LOCATION','EXP DATE','GROSS WEIGHT','INBOUND BOL','PROD ID 2']];
+  rows.forEach(r => {
+    data.push([
+      r.customer||'', r.sku||'', state.skuNames[r.sku]||'', r.po||'',
+      r.pcs, r.pcsPending||0, r.status||'', r.lot||'', r.skid||'', r.location||'',
+      r.expDate ? new Date(r.expDate).toLocaleDateString() : '',
+      r.grossWt||'', r.bol||'', r.prodId2||''
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = data[0].map(()=>({wch:16}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Raw Inventory');
+  const d = new Date();
+  const stamp = d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  const tag = f.cust ? '_'+f.cust : '';
+  XLSX.writeFile(wb, 'PickFlow_6049_Inventory'+tag+'_'+stamp+'.xlsx');
+  showAlert('✓ Exported '+rows.length+' inventory records to Excel.', 'success');
+}
+
 function triggerImport() {
   state.importMode = document.querySelector('input[name="itype"]:checked').value;
+  if (state.importMode === 'clear') {
+    if (!isAdmin()) { showAlert('Only admins can clear inventory.','warning'); return; }
+    if (!confirm('Clear ALL on-hand inventory (both customers)? Tickets are kept.')) return;
+    state.inventory = []; state.rawInventory = [];
+    try { localStorage.setItem('pickflow_inv','[]'); localStorage.setItem('pickflow_rawinv','[]'); } catch(e){}
+    buildHelper();
+    if (db) { db.ref('inventory').set([]).catch(()=>{}); db.ref('rawInventory').set([]).catch(()=>{}); }
+    closeModal();
+    showAlert('✓ All inventory cleared. Re-import each customer\'s file.','success');
+    showDashboard();
+    return;
+  }
   closeModal();
   document.getElementById('file-input').click();
 }
@@ -1577,13 +1658,20 @@ function processImport(wb) {
   // Prod ID 2 carries the PO reference for Nexus inventory (system PO# column not reliably mapped yet)
   const prodId2Key = Object.keys(ci).find(k => { const n=k.toLowerCase().replace(/[\s.]/g,''); return n==='prodid2'||n==='productid2'; });
   const prodId2I = prodId2Key !== undefined ? ci[prodId2Key] : -1;
+  // Customer/Owner column from the WMS extract — source of truth for which customer the rows belong to (same as 6021)
+  const custKey = Object.keys(ci).find(k => { const n=k.toLowerCase().trim(); return n==='customer'||n==='owner'||n==='client'||n==='customer name'||n==='cust'; });
+  const custI = custKey !== undefined ? ci[custKey] : -1;
+  // Product ID / item name column (the descriptive name). Must NOT collide with "Prod ID 2".
+  const nameKey = Object.keys(ci).find(k => { const n=k.toLowerCase().replace(/[\s.]/g,''); return n==='productid'||n==='productname'||n==='name'||n==='description'||n==='itemdescription'||n==='item'||n==='flavor'; });
+  const nameI = nameKey !== undefined ? ci[nameKey] : -1;
 
   if (skuI<0 || pcsI<0 || locI<0) {
     showAlert('Missing required columns. Found: ' + Object.keys(ci).join(', '), 'danger'); return;
   }
 
-  state.inventory = [];
-  state.rawInventory = [];
+  const newInv = [];
+  const newRaw = [];
+  const incomingCustomers = new Set();
   for (let i = headerRowIdx+1; i < allRows.length; i++) {
     const r = allRows[i];
     const sku = (r[skuI]||'').toString().trim();
@@ -1599,11 +1687,19 @@ function processImport(wb) {
     const bol = bolI >= 0 ? (r[bolI]||'').toString().trim() : '';
     const prodId2 = prodId2I >= 0 ? (r[prodId2I]||'').toString().trim() : '';
 
+    // Customer comes straight from the file. Canonicalize common variants so the rest of the app matches.
+    let customer = custI >= 0 ? (r[custI]||'').toString().trim() : '';
+    const cl = customer.toLowerCase();
+    if (cl.includes('nexus')) customer = 'Nexus';
+    else if (cl.includes('electrolit')) customer = 'Electrolit';
+
     if (!sku || isNaN(pcs) || pcs<=0 || !loc) continue;
 
+    if (customer) incomingCustomers.add(customer);
+
     // Store ALL valid rows in rawInventory for the preview tab
-    state.rawInventory.push({ sku, pcs, pcsPending:pcsPend, location:loc,
-      expDate:parseExpDate(exp), status:st||'AVAILABLE', lot, skid, po, grossWt, bol, prodId2 });
+    newRaw.push({ sku, pcs, pcsPending:pcsPend, location:loc,
+      expDate:parseExpDate(exp), status:st||'AVAILABLE', lot, skid, po, grossWt, bol, prodId2, customer });
 
     // Additional filters for picking helper only
     if (st && st !== 'AVAILABLE') continue;
@@ -1613,9 +1709,15 @@ function processImport(wb) {
       return l.includes(e);
     })) continue;
     if (pcsPend > 0) continue;
-    state.inventory.push({ sku, pcs, pcsPending:pcsPend, location:loc,
-      expDate:parseExpDate(exp), status:st||'AVAILABLE', lot, skid, po, grossWt, bol, prodId2 });
+    newInv.push({ sku, pcs, pcsPending:pcsPend, location:loc,
+      expDate:parseExpDate(exp), status:st||'AVAILABLE', lot, skid, po, grossWt, bol, prodId2, customer });
   }
+
+  // Replace ONLY the customers present in this file; keep every other customer's rows
+  // untouched. A blank customer cell never deletes a tagged customer. Order never matters.
+  const replaceSet = incomingCustomers.size ? incomingCustomers : new Set(['']);
+  state.rawInventory = state.rawInventory.filter(r => !replaceSet.has(r.customer||'')).concat(newRaw);
+  state.inventory   = state.inventory.filter(r => !replaceSet.has(r.customer||'')).concat(newInv);
 
   buildHelper();
   state.dataLoaded = true;
@@ -1630,7 +1732,8 @@ function processImport(wb) {
   document.getElementById('rebuild-btn').style.display = 'flex';
   document.getElementById('data-status').innerHTML = '<span class="status-dot"></span>DATA LOADED: ' + state.inventory.length + ' RECORDS';
   updateTicketList();
-  showAlert('✓ Inventory loaded — ' + state.inventory.length + ' records. QTY Guide: ' + Object.keys(state.qtyGuide).length + ' SKUs.', 'success');
+  const custNote = custI < 0 ? ' ⚠ No "Customer" column found (columns: ' + Object.keys(ci).join(', ') + ') — customers cannot be separated until it is present.' : '';
+  showAlert('✓ Imported ' + ([...incomingCustomers].filter(Boolean).join(' + ') || 'inventory') + ' (' + newRaw.length + ' rows). Total on-hand: ' + state.inventory.length + ' records. QTY Guide: ' + Object.keys(state.qtyGuide).length + ' SKUs.' + custNote, custI<0?'warning':'success');
   showDashboard();
   saveState();
 }
@@ -2527,7 +2630,7 @@ function applyInvFilter(field, value) {
   const poF = (window.invFilters.po||'').trim().toLowerCase();
   const custF = (window.invFilters.cust||'').trim();
   let filtered = state.rawInventory.length ? state.rawInventory : state.inventory;
-  if (custF) filtered = filtered.filter(r=>custOfSku(r.sku)===custF);
+  if (custF) filtered = filtered.filter(r=>(r.customer||'')===custF);
   if (skuF) filtered = filtered.filter(r=>r.sku.includes(skuF));
   if (locF) filtered = filtered.filter(r=>r.location.toLowerCase().includes(locF));
   if (lotF) filtered = filtered.filter(r=>(r.lot||'').toLowerCase().includes(lotF));
@@ -2546,7 +2649,7 @@ function applyInvFilter(field, value) {
       <th>EXP DATE</th><th>GROSS WT</th><th>INBOUND BOL</th>
     </tr></thead><tbody>` +
     (sl.length ? sl.map(r=>`<tr>
-      <td style="color:${custOfSku(r.sku)==='Nexus'?'var(--accent)':'var(--text2)'};font-weight:${custOfSku(r.sku)==='Nexus'?'bold':'normal'}">${custOfSku(r.sku)}</td>
+      <td style="color:${r.customer==='Nexus'?'var(--accent)':'var(--text2)'};font-weight:${r.customer==='Nexus'?'bold':'normal'}">${r.customer||'—'}</td>
       <td style="color:var(--accent)">${r.sku}</td>
       <td style="color:var(--text2)">${state.skuNames[r.sku]||'—'}</td>
       <td style="color:var(--text2)">${r.po||'—'}</td>
@@ -2617,7 +2720,7 @@ function showDataPreview() {
       const poFilter = (window.invFilters||{}).po||'';
       const custFilter = (window.invFilters||{}).cust||'';
       let filtered = state.rawInventory.length ? state.rawInventory : state.inventory;
-      if (custFilter) filtered = filtered.filter(r=>custOfSku(r.sku)===custFilter);
+      if (custFilter) filtered = filtered.filter(r=>(r.customer||'')===custFilter);
       if (skuFilter) filtered = filtered.filter(r=>r.sku.includes(skuFilter.trim()));
       if (locFilter) filtered = filtered.filter(r=>r.location.toLowerCase().includes(locFilter.trim().toLowerCase()));
       if (lotFilter) filtered = filtered.filter(r=>(r.lot||'').toLowerCase().includes(lotFilter.trim().toLowerCase()));
@@ -2651,6 +2754,7 @@ function showDataPreview() {
           </div>
           <div>
             <button class="btn btn-sm" onclick="window.invFilters={sku:'',loc:'',lot:'',po:'',cust:''};switchTab('inventory',0)">✕ Clear</button>
+            <button class="btn btn-sm btn-primary" onclick="exportInventoryExcel()" style="white-space:nowrap">⬇ Export Excel</button>
           </div>
         </div>
         <div id="inv-results">
@@ -2668,7 +2772,7 @@ function showDataPreview() {
           <th>EXP DATE</th><th>GROSS WT</th><th>INBOUND BOL</th>
         </tr></thead><tbody>`+
         (sl.length ? sl.map(r=>`<tr>
-          <td style="color:${custOfSku(r.sku)==='Nexus'?'var(--accent)':'var(--text2)'};font-weight:${custOfSku(r.sku)==='Nexus'?'bold':'normal'}">${custOfSku(r.sku)}</td>
+          <td style="color:${r.customer==='Nexus'?'var(--accent)':'var(--text2)'};font-weight:${r.customer==='Nexus'?'bold':'normal'}">${r.customer||'—'}</td>
           <td style="color:var(--accent)">${r.sku}</td>
           <td style="color:var(--text2)">${state.skuNames[r.sku]||'—'}</td>
           <td style="color:var(--text2)">${r.po||'—'}</td>
@@ -2690,7 +2794,11 @@ function showDataPreview() {
         sl.map(r=>`<tr><td style="color:var(--text2)">${r.rank}</td><td style="color:var(--accent)">${r.sku}</td><td style="color:var(--text2)">${state.skuNames[r.sku]||'—'}</td><td>${r.palletQty}</td><td>${r.location}</td><td style="color:var(--text2)">${r.oldestExp?r.oldestExp.toLocaleDateString():'—'}</td><td style="color:var(--accent2);font-weight:bold">${r.availPallets}</td></tr>`).join('')+
         `</tbody></table>`;
     } else if (tab==='qty') {
-      html=`<table class="sku-table"><thead><tr><th>SKU</th><th>NAME</th><th>QTY PER PALLET</th></tr></thead><tbody>`+
+      html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:11px;color:var(--text2)">${Object.keys(state.qtyGuide).length.toLocaleString()} SKUs in guide</span>
+        <button class="btn btn-sm btn-primary" onclick="exportQtyGuide()" style="white-space:nowrap">⬇ Export QTY Guide (for editing)</button>
+      </div>`+
+        `<table class="sku-table"><thead><tr><th>SKU</th><th>NAME</th><th>QTY PER PALLET</th></tr></thead><tbody>`+
         Object.entries(state.qtyGuide).sort((a,b)=>a[0].localeCompare(b[0])).map(([sku,qty])=>`<tr><td style="color:var(--accent)">${sku}</td><td style="color:var(--text2)">${state.skuNames[sku]||'—'}</td><td style="color:var(--accent2);font-weight:bold">${qty}</td></tr>`).join('')+
         `</tbody></table>`;
     }
@@ -2716,12 +2824,17 @@ function showDataPreview() {
 
 // ─── ALERTS ───────────────────────────────────────────────────────────────────
 function showAlert(msg,type) {
+  let host=document.getElementById('toast-host');
+  if(!host){ host=document.createElement('div'); host.id='toast-host'; host.className='toast-host'; document.body.appendChild(host); }
   const d=document.createElement('div');
-  d.className='alert alert-'+type;
-  d.style.cssText='position:fixed;bottom:20px;right:20px;z-index:9999;min-width:300px;max-width:500px';
+  d.className='toast toast-'+(type||'info');
   d.textContent=msg;
-  document.body.appendChild(d);
-  setTimeout(()=>d.remove(),4000);
+  host.appendChild(d);
+  setTimeout(()=>{
+    d.style.transition='opacity .3s, transform .3s';
+    d.style.opacity='0'; d.style.transform='translateY(-6px)';
+    setTimeout(()=>{ d.remove(); if(host && !host.children.length) host.remove(); },300);
+  },4200);
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
